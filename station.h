@@ -28,7 +28,7 @@ typedef struct _station_t station_t;
 struct _station_data_t {
   char *name;
   unsigned int ndata;
-  rbfsum_t rs[128];
+  rbfsum_t rs[24];
 };
 
 typedef struct _station_data_t station_data_t;

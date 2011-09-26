@@ -1,5 +1,7 @@
 /*
- * Convert rbfsum file to xml
+ * Convert RbfSum file to XML
+ *
+ * Copyright (C) 2011 - Ardhan Madras <ajhwb@knac.com> 
  */
 
 #include <sys/types.h>
@@ -9,34 +11,41 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <glib.h>
 
 #include "station.h"
 #include "queue.h"
 
-#define to_stderr(line) fwrite(line, strlen(line), 1, stderr)
 
 int main(int argc, char **argv)
 {
-    char            *progname, *tmp, *buffer;
+    char            *progname, *tmp, *buffer, *station_name;
     char            line[2048];
-    int             ret, i, j, found, hour_id;
-    double          total_data, total_gap;
+    int             ret, i, j, found, hour_id, type;
+    double          total_data, total_gap, lat, lng;
     struct stat     stbuf;
-    struct tm       *lt;
     FILE            *fp;
     station_data_t  *station;
     queue_t         *list, *tmp_list;
+    GKeyFile        *keyfile;
 
     progname = argv[0];
     if ((tmp = strrchr(progname, '/')))
         progname = ++tmp;
 
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s rbfsum-file\n", progname);
+    if (argc < 3) {
+        fprintf(stderr, "Usage: %s config-file rbfsum-file\n", progname);
         exit(1);
     }
 
-    ret = stat(argv[1], &stbuf);
+    keyfile = g_key_file_new();
+    ret = g_key_file_load_from_file(keyfile, argv[1], G_KEY_FILE_NONE, NULL);
+    if (ret == 0) {
+        fprintf(stderr, "%s: could not read configuration file\n", progname);
+        exit(1);
+    }
+
+    ret = stat(argv[2], &stbuf);
     if (ret == -1) {
         perror(argv[1]);
         exit(1);
@@ -45,7 +54,7 @@ int main(int argc, char **argv)
     if (stbuf.st_size <= 0)
         exit(1);
 
-    fp = fopen(argv[1], "r");
+    fp = fopen(argv[2], "r");
     if (!fp) {
         perror(argv[1]);
         exit(1);
@@ -78,39 +87,41 @@ int main(int argc, char **argv)
         while (tmp_list) {
             station = tmp_list->data;
 
-            if (station->ndata < 24) {
-                tmp_list = tmp_list->next;
-                continue;
-            }
-
             j = 0;
             found = 0;
-            while (station_info[j].name) {
-                if (!strcmp(station_info[j].name, station->name) && station_info[j].state) {
-                    found = 1;
-                    break;
-                }
-                j++;
-            }
-
-            if (!found) {
+            if (!g_key_file_has_group(keyfile, station->name)) {
                 tmp_list = tmp_list->next;
                 continue;
             }
+
+            if (!g_key_file_get_integer(keyfile, station->name, "status", NULL)) {
+                tmp_list = tmp_list->next;
+                continue;
+            }
+
+            station_name = g_key_file_get_string(keyfile, station->name, "name", NULL);
+            lat = g_key_file_get_double(keyfile, station->name, "lat", NULL);
+            lng = g_key_file_get_double(keyfile, station->name, "lng", NULL);
 
             sprintf(line, "  <marker lat=\"%.10g\" lng=\"%.10g\" region=\"%s (%s)\" "
                     "latitude=\"Latitude: %.10g\" longitude=\"Longitude: %.10g\" ",
-                    station_info[j].lat, station_info[j].lng, station_info[j].desc,
-                    station_info[j].name, station_info[j].lat, station_info[j].lng);
+                    lat, lng, station_name, station->name, lat, lng);
+            g_free(station_name);
             fwrite(line, strlen(line), 1, stdout);
 
             int x = 0;
-            char data[9], breaks[6], gap[9];
             hour_id = 0;
 
             total_data = 0;
             total_gap = 0;
 
+            if (station->ndata == 24)
+                for (x = 0; x < 24; x++) {
+                    total_data += station->rs[x].data;
+                    total_gap += station->rs[x].gap;
+                }
+
+#if 0
             for (; x < 9; x++, hour_id++) {
                 total_data += station->rs[hour_id].data;
                 total_gap += station->rs[hour_id].gap;
@@ -207,6 +218,7 @@ int main(int argc, char **argv)
             sprintf(line, "ket__7=\"Hour starting:       Data (sec)    "
                     "ReTx(%%)    Gaps (sec)    Breaks\" ");
             fwrite(line, strlen(line), 1, stdout);
+#endif
 
             ret = rbfsum_get_status(station->rs, 24);
             if (ret == RBFSUM_STATUS_ON)
@@ -229,7 +241,11 @@ int main(int argc, char **argv)
             sprintf(line, "gap=\"%g\" ", total_gap);
             fwrite(line, strlen(line), 1, stdout);
 
-            sprintf(line, "station=\"%s\" />", station_info[j].name);
+            sprintf(line, "station=\"%s\" ", station->name);
+            fwrite(line, strlen(line), 1, stdout);
+
+            type = g_key_file_get_integer(keyfile, station->name, "type", NULL);
+            sprintf(line, "type=\"%i\" />", type);
             puts(line);
 
             tmp_list = tmp_list->next;

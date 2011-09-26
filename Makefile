@@ -17,8 +17,8 @@ ${PACKAGE}: ${OBJS}
 .c.o:
 	${CC} ${CFLAGS} -c $<
 
-xml:
-	${CC} -Wall -O2 queue.c station.c rbfsum2xml.c -o rbfsum2xml
+xml: station.o queue.o rbfsum2xml.o
+	${CC} ${GLIBLDFLAGS} queue.o station.o rbfsum2xml.o -o rbfsum2xml
 
 rbfsum2db: station.o queue.o rbfsum2db.o
 	${CC} ${PSQLLDFLAGS} ${GLIBLDFLAGS} station.o queue.o rbfsum2db.o -o rbfsum2db

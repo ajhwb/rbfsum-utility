@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Ringbuffer generation script
-# Copyright (C) 2011 - Mindotama Avia Teknik, Ardhan Madras <ardhan@mindotama.co.id>
+# RbfSum generation script
+# Copyright (C) 2011 - Mindotama Avia Teknik, Ardhan Madras <ardhan@knac.com>
 #
 
 rundir=/nmx/mindo
@@ -93,7 +93,8 @@ if [ $? -ne 0 ]; then
 fi
 
 # Okay, lets generate it
-cd $dir1 && /nmx/bin/rbfsum "*.BHZ" -s $start -h 24 > $outdir/$s/$start.txt
+printf "Generated at `date +'%Y-%m-%d %H:%M:%S %Z'`\n\n" > $outdir/$s/$start.txt
+cd $dir1 && /nmx/bin/rbfsum "*.BHZ" -s $start -h 24 >> $outdir/$s/$start.txt
 cd $dir2 && /nmx/bin/rbfsum "*.BHZ" -s $start -h 24 >> $outdir/$s/$start.txt
 
 # Build the xml filename
