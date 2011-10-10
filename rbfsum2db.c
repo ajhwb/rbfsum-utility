@@ -124,10 +124,24 @@ char *generate_timestamp(time_t t)
                             st->tm_hour, st->tm_min, st->tm_sec);
 }
 
+static int fetch_station_id(const PGresult *res, const char *code)
+{
+    int rows, cols, i;
+
+    rows = PQntuples(res);
+    cols = PQnfields(res);
+
+    for (i = 0; i < rows; i++) {
+        if (!strcmp(code, PQgetvalue(res, i, 0)))
+            return atoi(PQgetvalue(res, i, 1));
+    }
+    return 0;
+}
+
 int insert_data(const struct config *config, queue_t *data)
 {
     PGconn *conn;
-    PGresult *res;
+    PGresult *res, *station_res;
     queue_t *ptr;
     station_data_t *station;
     rbfsum_t rs;
@@ -146,13 +160,19 @@ int insert_data(const struct config *config, queue_t *data)
         return 3;
     }
 
+    station_res = PQexec(conn, "SELECT stasiun_kode,stasiun_id FROM tblstasiun "
+                         "WHERE stasiun_hide='0' ORDER BY stasiun_kode");
+    ret = PQresultStatus(station_res);
+    if (ret != PGRES_TUPLES_OK) {
+        PQfinish(conn);
+        return 6;
+    }
+
     ptr = data;
     while (ptr) {
         station = ptr->data;
-        station_id = get_station_id(station->name);
-        if (station_id <= 0 
-            || station_info[station_id].state == 0
-            || station->ndata != 24) {
+        station_id = fetch_station_id(station_res, station->name);
+        if (station_id <= 0 || station->ndata != 24) {
             ptr = ptr->next;
             continue;
         }
@@ -168,12 +188,14 @@ int insert_data(const struct config *config, queue_t *data)
             g_free(cmd);
             g_free(timestamp);
             if (!res) {
+                PQclear(station_res);
                 PQfinish(conn);
                 return 6;
             }
             ret = PQresultStatus(res);
             PQclear(res);
             if (ret != PGRES_TUPLES_OK) {
+                PQclear(station_res);
                 PQfinish(conn);
                 return 6;
             }
@@ -181,6 +203,21 @@ int insert_data(const struct config *config, queue_t *data)
         ptr = ptr->next;
     }
 
+    timestamp = generate_timestamp(rs.start);
+    *(timestamp + 10) = 0;
+    cmd = g_strdup_printf("SELECT func_insert_percentage('%s')", timestamp);
+    res = PQexec(conn, cmd);
+    g_free(timestamp);
+    g_free(cmd);
+
+    ret = PQresultStatus(res);
+    if (ret != PGRES_TUPLES_OK) {
+        PQclear(station_res);
+        PQfinish(conn);
+        return 6;
+    }
+
+    PQclear(station_res);
     PQfinish(conn);
     return 0;
 }
@@ -260,7 +297,7 @@ int main(int argc, char **argv)
         die(2, "could not parse config file\n");
 
     for (; i < argc; i++) {
-	puts(argv[i]);
+        puts(argv[i]);
         ret = read_data(argv[i], &data);
         if (ret)
             die_with_error(ret);
