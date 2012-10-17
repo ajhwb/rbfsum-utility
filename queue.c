@@ -160,7 +160,7 @@ queue_t *queue_sort(queue_t *list, int (*func) (const void *, const void *))
     return queue_sort_real(list, func);
 }
 
-void queue_foreach(queue_t *queue, int (*func) (void*, void*), void *data)
+void queue_foreach(queue_t *queue, void (*func) (void*, void*), void *data)
 {
     queue_t *q = queue;
     while (q) {

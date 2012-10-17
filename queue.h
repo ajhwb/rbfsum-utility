@@ -15,5 +15,7 @@ queue_t *queue_prepend(queue_t *, void *);
 queue_t *queue_remove(queue_t *, const void *);
 unsigned int queue_length(queue_t *);
 queue_t *queue_sort(queue_t *, int (*func) (const void *, const void *));
+void queue_foreach(queue_t *, void (*func) (void *, void *), void *);
+void queue_free(queue_t *);
 
 #endif
